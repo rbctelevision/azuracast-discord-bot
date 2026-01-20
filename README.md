@@ -103,6 +103,7 @@ A Discord bot that plays an Azuracast live stream in a voice channel and provide
 **Public:**
 - `/nowplaying` - Show the currently playing song with artwork and Spotify link
 - `/requests` - Get information about making song requests
+- `/credits` - Show credits and information about this bot
 
 ## Notes
 
