@@ -442,7 +442,6 @@ async function disconnectFromVoiceChannel() {
         
         // Clear from database
         await clearSavedVoiceChannel(guild.id);
-    }
     
     currentVoiceChannel = null;
     return true;
