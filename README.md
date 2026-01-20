@@ -105,6 +105,13 @@ A Discord bot that plays an Azuracast live stream in a voice channel and provide
    ```bash
    pkill node
    ```
+   **Use pm2 to keep online 24/7**
+   ```bash
+   npm install -g pm2
+   pm2 start bot.js --name azuracast-discord-bot
+   pm2 save
+   pm2 startup
+   ```
 
 ## Commands
 
