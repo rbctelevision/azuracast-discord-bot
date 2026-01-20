@@ -476,6 +476,10 @@ const commands = [
     new SlashCommandBuilder()
         .setName('nowplaying')
         .setDescription('Show the currently playing song'),
+    
+    new SlashCommandBuilder()
+        .setName('credits')
+        .setDescription('Show credits and information about this bot'),
 ];
 
 async function registerCommands() {
@@ -596,6 +600,25 @@ client.on('interactionCreate', async interaction => {
         } else {
             await interaction.editReply({ content: 'Unable to fetch currently playing song. Please try again later.' });
         }
+    }
+
+    if (interaction.commandName === 'credits') {
+        const embed = new EmbedBuilder()
+            .setTitle('🎵 AzuraCast Discord Bot')
+            .setDescription('A Discord bot that plays an AzuraCast live stream in a voice channel and provides information about currently playing songs.')
+            .setColor(0x5865F2)
+            .addFields(
+                { name: '👨‍💻 Creator', value: '**Nate Wombwell**', inline: true },
+                { name: '🌐 Website', value: '[bot.rbctv.xyz](https://bot.rbctv.xyz)', inline: true },
+                { name: '📦 Repository', value: '[GitHub](https://github.com/rbctelevision/azuracast-discord-bot)', inline: true }
+            )
+            .addFields(
+                { name: '🔧 Technologies', value: '• Discord.js\n• AzuraCast API\n• Spotify API\n• MongoDB', inline: false }
+            )
+            .setFooter({ text: 'Created by Nate Wombwell for RBC Television', iconURL: 'https://github.com/identicons/rbctelevision.png' })
+            .setURL('https://github.com/rbctelevision/azuracast-discord-bot');
+
+        await interaction.reply({ embeds: [embed] });
     }
 });
 
