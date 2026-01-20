@@ -1,0 +1,91 @@
+# RBC Radio Discord Bot
+
+A Discord bot that plays the RBC Radio live stream in a voice channel and provides information about currently playing songs.
+
+## Features
+
+- 🎵 Plays RBC Radio live stream in a voice channel
+- 🎧 Shows currently playing song with artwork and Spotify link
+- 📡 Updates bot status with the current song
+- 🔗 Directs users to request songs via website
+- 🔄 Automatically reconnects if disconnected (NEVER leaves VC)
+
+## Setup
+
+1. **Install FFmpeg** (Required for audio streaming)
+   
+   **Ubuntu/Debian:**
+   ```bash
+   sudo apt update
+   sudo apt install ffmpeg
+   ```
+   
+   **macOS:**
+   ```bash
+   brew install ffmpeg
+   ```
+   
+   **Windows:**
+   Download from https://ffmpeg.org/download.html and add to PATH
+
+2. **Install Dependencies**
+   ```bash
+   npm install
+   ```
+
+2. **Configure Environment Variables**
+   
+   Create a `.env` file in the root directory:
+   ```env
+   DISCORD_TOKEN=your_discord_bot_token_here
+   CLIENT_ID=your_discord_bot_client_id_here
+   SPOTIFY_CLIENT_ID=your_spotify_client_id_here (optional)
+   SPOTIFY_CLIENT_SECRET=your_spotify_client_secret_here (optional)
+   ```
+
+   To get these values:
+   - **Discord**: Go to https://discord.com/developers/applications
+     - Create a new application or select an existing one
+     - Go to the "Bot" section to get your `DISCORD_TOKEN`
+     - Go to the "General Information" section to get your `CLIENT_ID`
+   - **Spotify** (Optional - for better artwork fetching):
+     - Go to https://developer.spotify.com/dashboard
+     - Create a new app
+     - Get your Client ID and Client Secret
+     - The bot will fall back to Azura artwork if Spotify credentials are not provided
+
+3. **Invite Bot to Server**
+   
+   Replace `CLIENT_ID` with your bot's client ID:
+   ```
+   https://discord.com/api/oauth2/authorize?client_id=CLIENT_ID&permissions=3148800&scope=bot%20applications.commands
+   ```
+   
+   Required permissions:
+   - Connect to voice channels
+   - Speak in voice channels
+   - Use Slash Commands
+
+4. **Start the Bot**
+   ```bash
+   npm start
+   ```
+
+## Commands
+
+**Admin Only:**
+- `/setvc [channel]` - Set the voice channel for the radio bot to connect to (Admin only)
+- `/leavevc` - Disconnect the bot from the current voice channel (Admin only)
+
+**Public:**
+- `/nowplaying` - Show the currently playing song with artwork and Spotify link
+- `/requests` - Get information about making song requests
+
+## Notes
+
+- The bot will automatically reconnect if disconnected from the voice channel (unless manually disconnected via `/leavevc`)
+- The bot status updates every 30 seconds with the currently playing song
+- The stream URL is: https://azura.rbctelevision.org/listen/rbcradio/radio.mp3
+- Now playing information is fetched from: https://azura.rbctelevision.org/api/nowplaying/rbcradio
+- Artwork is fetched from Spotify when credentials are provided, otherwise falls back to Azura artwork
+- VC commands (`/setvc` and `/leavevc`) require Administrator permissions
