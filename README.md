@@ -45,6 +45,9 @@ A Discord bot that plays an Azuracast live stream in a voice channel and provide
    SPOTIFY_CLIENT_ID=your_spotify_client_id_here (optional)
    SPOTIFY_CLIENT_SECRET=your_spotify_client_secret_here (optional)
 
+   # If you want the bot to autorejoin after shutdown
+   MONGODB_URI=
+
    # If you want to change from the RBC Radio Feed
    STREAM_URL=https://your-radio-station.com/stream.mp3
    API_URL=https://your-azuracast-instance.com/api/nowplaying/yourstation
