@@ -1,11 +1,11 @@
-# RBC Radio Discord Bot
-
-A Discord bot that plays the RBC Radio live stream in a voice channel and provides information about currently playing songs.
+# Azuracast Discord Bot
+###### Created by Nate Wombwell for RBC
+A Discord bot that plays an Azuracast live stream in a voice channel and provides information about currently playing songs.
 
 ## Features
 
-- 🎵 Plays RBC Radio live stream in a voice channel
-- 🎧 Shows currently playing song with artwork and Spotify link
+- 🎵 Plays the live stream in a voice channel
+- 🎧 Shows currently playing song with artwork and Spotify link (if wanted)
 - 📡 Updates bot status with the current song
 - 🔗 Directs users to request songs via website
 - 🔄 Automatically reconnects if disconnected (NEVER leaves VC)
@@ -37,10 +37,19 @@ A Discord bot that plays the RBC Radio live stream in a voice channel and provid
    
    Create a `.env` file in the root directory:
    ```env
+   # REQUIRED
    DISCORD_TOKEN=your_discord_bot_token_here
    CLIENT_ID=your_discord_bot_client_id_here
+
+   # Spotify Artwork Fetching
    SPOTIFY_CLIENT_ID=your_spotify_client_id_here (optional)
    SPOTIFY_CLIENT_SECRET=your_spotify_client_secret_here (optional)
+
+   # If you want to change from the RBC Radio Feed
+   STREAM_URL=https://your-radio-station.com/stream.mp3
+   API_URL=https://your-azuracast-instance.com/api/nowplaying/yourstation
+   REQUESTS_URL=https://your-radio-website.com/requests
+   USER_AGENT=your-bot-name/1.0 (Icecast client; your-info)
    ```
 
    To get these values:
@@ -69,7 +78,10 @@ A Discord bot that plays the RBC Radio live stream in a voice channel and provid
 4. **Start the Bot**
    ```bash
    npm start
-   ```
+   ```STREAM_URL=https://your-radio-station.com/stream.mp3
+API_URL=https://your-azuracast-instance.com/api/nowplaying/yourstation
+REQUESTS_URL=https://your-radio-website.com/requests
+USER_AGENT=your-bot-name/1.0 (Icecast client; your-info)
 
 ## Commands
 
@@ -89,3 +101,5 @@ A Discord bot that plays the RBC Radio live stream in a voice channel and provid
 - Now playing information is fetched from: https://azura.rbctelevision.org/api/nowplaying/rbcradio
 - Artwork is fetched from Spotify when credentials are provided, otherwise falls back to Azura artwork
 - VC commands (`/setvc` and `/leavevc`) require Administrator permissions
+
+A Creation of [Nate Wombwell](https://github.com/natejwaus)
