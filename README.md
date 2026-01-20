@@ -2,6 +2,9 @@
 ###### Created by Nate Wombwell for RBC
 A Discord bot that plays an Azuracast live stream in a voice channel and provides information about currently playing songs.
 
+> [!NOTE]
+> If your just looking to add the RBC Radio bot in your server to enjoy some songs from RBC Radio, consider adding the bot [here.](https://discord.com/oauth2/authorize?client_id=1444607568776527957)
+
 ## Features
 
 - 🎵 Plays the live stream in a voice channel
