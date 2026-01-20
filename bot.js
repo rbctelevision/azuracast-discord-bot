@@ -423,24 +423,22 @@ function setupAudioPlayer() {
 
 // Disconnect from voice channel
 async function disconnectFromVoiceChannel() {
-    shouldStayConnected = false;
-    
-    if (audioPlayer) {
-        audioPlayer.stop();
-        audioPlayer = null;
-    }
-    
-    if (connection) {
-        connection.destroy();
-        connection = null;
-    }
-    
-    const guild = currentVoiceChannel?.guild;
-    if (guild) {
-        const voiceConnection = getVoiceConnection(guild.id);
-        if (voiceConnection) {
-            voiceConnection.destroy();
-        }
+  shouldStayConnected = false;
+
+  if (audioPlayer) {
+    audioPlayer.stop();
+    audioPlayer = null;
+  }
+
+  if (currentVoiceChannel) {
+    safeDestroyConnection(currentVoiceChannel.guild.id);
+    await clearSavedVoiceChannel(currentVoiceChannel.guild.id);
+  }
+
+  connection = null;
+  currentVoiceChannel = null;
+  return true;
+}
         
         // Clear from database
         await clearSavedVoiceChannel(guild.id);
