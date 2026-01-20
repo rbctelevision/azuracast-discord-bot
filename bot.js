@@ -608,14 +608,14 @@ client.on('interactionCreate', async interaction => {
             .setDescription('A Discord bot that plays an AzuraCast live stream in a voice channel and provides information about currently playing songs.')
             .setColor(0x5865F2)
             .addFields(
-                { name: '👨‍💻 Creator', value: '**Nate Wombwell**', inline: true },
+                { name: '👨‍💻 Creator', value: '[**Nate Wombwell**](https://natew.au/)', inline: true },
                 { name: '🌐 Website', value: '[bot.rbctv.xyz](https://bot.rbctv.xyz)', inline: true },
                 { name: '📦 Repository', value: '[GitHub](https://github.com/rbctelevision/azuracast-discord-bot)', inline: true }
             )
             .addFields(
                 { name: '🔧 Technologies', value: '• Discord.js\n• AzuraCast API\n• Spotify API\n• MongoDB', inline: false }
             )
-            .setFooter({ text: 'Created by Nate Wombwell for RBC Television', iconURL: 'https://github.com/identicons/rbctelevision.png' })
+            .setFooter({ text: 'Created by Nate Wombwell for RBC Television', iconURL: 'https://i.ibb.co/PZ3f8LSY/04e3f9bd1442fe90361fcad172dd8af4.png' })
             .setURL('https://github.com/rbctelevision/azuracast-discord-bot');
 
         await interaction.reply({ embeds: [embed] });
