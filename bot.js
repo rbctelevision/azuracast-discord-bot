@@ -506,19 +506,19 @@ client.on('interactionCreate', async interaction => {
     if (interaction.commandName === 'setvc') {
         // Ensure command is used in a guild
         if (!interaction.guild) {
-            return interaction.reply({ content: '❌ This command can only be used in a server!', flags: MessageFlags.Ephemeral });
+            return interaction.reply({ content: 'This command can only be used in a server!', flags: MessageFlags.Ephemeral });
         }
 
         // Double check admin permission (backup check)
         if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({ content: '❌ You need Administrator permissions to use this command!', flags: MessageFlags.Ephemeral });
+            return interaction.reply({ content: 'You need Administrator permissions to use this command!', flags: MessageFlags.Ephemeral });
         }
 
         const channel = interaction.options.getChannel('channel');
         
         // Validate that it's a voice channel (should already be restricted, but double-check)
         if (!channel || channel.type !== ChannelType.GuildVoice) {
-            return interaction.reply({ content: '❌ Please select a valid voice channel!', flags: MessageFlags.Ephemeral });
+            return interaction.reply({ content: 'Please select a valid voice channel!', flags: MessageFlags.Ephemeral });
         }
 
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -526,43 +526,43 @@ client.on('interactionCreate', async interaction => {
         const success = await connectToVoiceChannel(channel);
         
         if (success) {
-            await interaction.editReply({ content: `✅ Connected to ${channel.name}! Playing radio stream...` });
+            await interaction.editReply({ content: `Connected to ${channel.name}! Playing radio stream...` });
         } else {
-            await interaction.editReply({ content: '❌ Failed to connect to voice channel. Please check permissions.' });
+            await interaction.editReply({ content: 'Failed to connect to voice channel. Please check permissions.' });
         }
     }
 
     if (interaction.commandName === 'leavevc') {
         // Ensure command is used in a guild
         if (!interaction.guild) {
-            return interaction.reply({ content: '❌ This command can only be used in a server!', flags: MessageFlags.Ephemeral });
+            return interaction.reply({ content: 'This command can only be used in a server!', flags: MessageFlags.Ephemeral });
         }
 
         // Double check admin permission (backup check)
         if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({ content: '❌ You need Administrator permissions to use this command!', flags: MessageFlags.Ephemeral });
+            return interaction.reply({ content: 'You need Administrator permissions to use this command!', flags: MessageFlags.Ephemeral });
         }
 
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         if (!currentVoiceChannel) {
-            return interaction.editReply({ content: '❌ Bot is not connected to any voice channel!' });
+            return interaction.editReply({ content: 'Bot is not connected to any voice channel!' });
         }
 
         const success = await disconnectFromVoiceChannel();
         
         if (success) {
-            await interaction.editReply({ content: '✅ Disconnected from voice channel.' });
+            await interaction.editReply({ content: 'Disconnected from voice channel.' });
         } else {
-            await interaction.editReply({ content: '❌ Failed to disconnect from voice channel.' });
+            await interaction.editReply({ content: 'Failed to disconnect from voice channel.' });
         }
     }
 
     if (interaction.commandName === 'requests') {
         const embed = new EmbedBuilder()
-            .setTitle('🎵 Make a Request!')
+            .setTitle('Make a Request!')
             .setDescription(`To request a song, please visit:\n${REQUESTS_URL}`)
-            .setColor(0x5865F2)
+            .setColor(0xE91E63) // Vibrant pink/magenta from image
             .setURL(REQUESTS_URL);
 
         await interaction.reply({ embeds: [embed] });
@@ -574,18 +574,25 @@ client.on('interactionCreate', async interaction => {
         const np = await fetchNowPlaying();
         
         if (np && np.song) {
+            // Get custom emoji for now playing - try to get from cache, fallback to string format
+            let nowPlayingEmoji = '<:_:1463041463716937885>';
+            const emoji = client.emojis.cache.get('1463041463716937885');
+            if (emoji) {
+                nowPlayingEmoji = emoji.toString();
+            }
+            
             const embed = new EmbedBuilder()
-                .setTitle('🎵 Now Playing')
+                .setTitle(`${nowPlayingEmoji} Now Playing`)
                 .setDescription(`**${np.song}**\nby ${np.artist}`)
-                .setColor(0x1DB954)
+                .setColor(0xE91E63) // Vibrant pink/magenta from image
                 .addFields(
-                    { name: '🎧 Spotify', value: `[Search on Spotify](${np.spotifyUrl})`, inline: true }
+                    { name: 'Spotify', value: `[Search on Spotify](${np.spotifyUrl})`, inline: true }
                 );
 
             // Add live streaming indicator if someone is actively streaming
             if (np.isLive && np.streamerName) {
-                embed.setDescription(`🔴 **LIVE:** ${np.streamerName} is currently on air!\n\n**${np.song}**\nby ${np.artist}`);
-                embed.setColor(0xFF0000); // Red for live
+                embed.setDescription(`**LIVE:** ${np.streamerName} is currently on air!\n\n**${np.song}**\nby ${np.artist}`);
+                embed.setColor(0xDC143C); // Deep red/crimson for live (from image's red tones)
             }
 
             // Set Spotify artwork (or fallback) as thumbnail only (top right)
@@ -606,7 +613,7 @@ client.on('interactionCreate', async interaction => {
         const embed = new EmbedBuilder()
             .setTitle('🎵 AzuraCast Discord Bot')
             .setDescription('A Discord bot that plays an AzuraCast live stream in a voice channel and provides information about currently playing songs.')
-            .setColor(0x5865F2)
+            .setColor(0xFF1744) // Vibrant red from image
             .addFields(
                 { name: '👨‍💻 Creator', value: '[**Nate Wombwell**](https://natew.au/)', inline: true },
                 { name: '🌐 Website', value: '[bot.rbctv.xyz](https://bot.rbctv.xyz)', inline: true },
