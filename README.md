@@ -81,10 +81,6 @@ A Discord bot that plays an Azuracast live stream in a voice channel and provide
 4. **Start the Bot**
    ```bash
    npm start
-   ```STREAM_URL=https://your-radio-station.com/stream.mp3
-API_URL=https://your-azuracast-instance.com/api/nowplaying/yourstation
-REQUESTS_URL=https://your-radio-website.com/requests
-USER_AGENT=your-bot-name/1.0 (Icecast client; your-info)
 
 ## Commands
 
