@@ -95,7 +95,13 @@ A Discord bot that plays an Azuracast live stream in a voice channel and provide
 
 4. **Start the Bot**
    ```bash
-   npm start
+   node bot.js &
+   ```
+
+   **Kill the bot**
+   ```bash
+   pkill node
+   ```
 
 ## Commands
 
