@@ -15,6 +15,9 @@ A Discord bot that plays an Azuracast live stream in a voice channel and provide
 
 ## Setup
 
+> [!WARNING]  
+> The minimum required Node.JS version is v22
+
 1. **Install FFmpeg** (Required for audio streaming)
    
    **Ubuntu/Debian:**
