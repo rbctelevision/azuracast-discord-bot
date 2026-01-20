@@ -65,6 +65,18 @@ A Discord bot that plays an Azuracast live stream in a voice channel and provide
      - Create a new app
      - Get your Client ID and Client Secret
      - The bot will fall back to Azura artwork if Spotify credentials are not provided
+   - **MongoDB** (Optional - Persistent Rejoining)
+     ##### You can use your own MongoDB Database (for advanced users)
+     ##### The below tutorial is for MongoDB Atlas
+     - Create or sign in to a [MongoDB Atlas](https://cloud.mongodb.com) account
+     - Create a new project, then deploy a cluster (Shared M0 is fine to start)
+     - Add a database user (username + password) with read/write access
+     - Go to Network Access and allow your server IP (or 0.0.0.0/0 temporarily for testing)
+     - Open the cluster → click Connect
+     - Select “Drivers” (or “Connect your application”)
+     - Copy the provided connection string (URI)
+     - Replace <username>, <password>, and <database> in the URI
+     - Insert it into the .env file
 
 3. **Invite Bot to Server**
    
