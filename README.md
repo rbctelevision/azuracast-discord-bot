@@ -132,4 +132,4 @@ A Discord bot that plays an Azuracast live stream in a voice channel and provide
 - Artwork is fetched from Spotify when credentials are provided, otherwise falls back to Azura artwork
 - VC commands (`/setvc` and `/leavevc`) require Administrator permissions
 
-A Creation of [Nate Wombwell](https://github.com/natejwaus)
+AzuraCast Discord Bot © 2026 by [Nate Wombwell](https://github.com/natejwaus)/[RBC Television](https://github.com/rbctelevision) is licensed under CC BY-NC-SA 4.0.
