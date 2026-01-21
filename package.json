@@ -1,0 +1,28 @@
+{
+  "name": "rbc-radio-discord-bot",
+  "version": "1.0.0",
+  "description": "Discord bot for RBC Radio that plays live stream and shows now playing information",
+  "main": "bot.js",
+  "type": "module",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "radio"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@discordjs/opus": "^0.10.0",
+    "@discordjs/voice": "^0.16.0",
+    "axios": "^1.6.2",
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.3.1",
+    "libsodium-wrappers": "^0.8.1",
+    "mongodb": "^6.3.0",
+    "tweetnacl": "^1.0.3",
+    "undici": "^6.0.0"
+  }
+}
