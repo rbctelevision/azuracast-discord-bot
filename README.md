@@ -1,5 +1,4 @@
 # Azuracast Discord Bot
-###### Created by Nate Wombwell for RBC
 A Discord bot that plays an Azuracast live stream in a voice channel and provides information about currently playing songs.
 
 > [!NOTE]
