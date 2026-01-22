@@ -54,11 +54,39 @@ let nowPlayingCache = { song: '', artist: '', art: '', spotifyUrl: '', isLive: f
 let shouldStayConnected = true;
 let mongoClient = null;
 let db = null;
+let reconnectAttempts = {}; // Track reconnect attempts per guild
+const MAX_RECONNECT_ATTEMPTS = 3;
+const RECONNECT_BACKOFF_MS = 2000; // Base backoff time
+const DEBUG_ENDPOINT = 'http://127.0.0.1:7242/ingest/65adcaca-c989-4b88-87ed-f71a63d67458';
+
+// Helper function to send debug logs to monitoring endpoint
+async function sendDebugLog(location, message, data = {}) {
+    try {
+        await fetch(DEBUG_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                location,
+                message,
+                data,
+                timestamp: Date.now(),
+                sessionId: 'debug-session',
+                runId: 'run1'
+            })
+        }).catch(() => {}); // Silently fail if endpoint is unavailable
+    } catch (error) {
+        // Ignore debug logging errors
+    }
+}
 
 // MongoDB connection
 async function connectToMongoDB() {
     try {
-        const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017';
+        const mongoUri = process.env.MONGODB_URI;
+        if (!mongoUri) {
+            console.log('MONGODB_URI not set, skipping MongoDB connection');
+            return false;
+        }
         mongoClient = new MongoClient(mongoUri);
         await mongoClient.connect();
         db = mongoClient.db('rbc_radio_bot');
@@ -143,7 +171,7 @@ async function getSpotifyToken() {
 async function getSpotifyArtwork(artist, title) {
     const token = await getSpotifyToken();
     if (!token) {
-        console.log('No Spotify token available - check SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in .env');
+        console.log('Spotify credentials not configured - skipping Spotify artwork lookup');
         return null;
     }
     
@@ -163,7 +191,8 @@ async function getSpotifyArtwork(artist, title) {
                 q: query,
                 type: 'track',
                 limit: 5  // Get more results for better matching
-            }
+            },
+            timeout: 5000 // 5 second timeout for Spotify API
         });
         
         if (response.data.tracks && response.data.tracks.items && response.data.tracks.items.length > 0) {
@@ -171,16 +200,16 @@ async function getSpotifyArtwork(artist, title) {
             // Get highest resolution image (first in array is usually the largest)
             if (track.album && track.album.images && track.album.images.length > 0) {
                 const artworkUrl = track.album.images[0].url;
-                console.log(`Found Spotify artwork: ${artworkUrl}`);
+                console.log(`Found Spotify artwork for "${title}"`);
                 return artworkUrl;
             }
         } else {
-            console.log('No tracks found in Spotify search results');
+            console.log(`No Spotify results found for "${title}" by "${artist}"`);
         }
     } catch (error) {
-        console.error('Error searching Spotify:', error.response?.data || error.message);
+        console.error('Error searching Spotify:', error.response?.data?.error?.message || error.message);
         if (error.response?.status === 401) {
-            console.error('Spotify token expired or invalid');
+            console.error('Spotify token invalid - check SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET');
         }
     }
     
@@ -190,7 +219,7 @@ async function getSpotifyArtwork(artist, title) {
 // Fetch now playing information from Azura API
 async function fetchNowPlaying() {
     try {
-        const response = await axiosInstance.get(API_URL);
+        const response = await axiosInstance.get(API_URL, { timeout: 5000 });
         const data = response.data;
         
         if (data.now_playing && data.now_playing.song) {
@@ -204,16 +233,11 @@ async function fetchNowPlaying() {
             
             // Get artwork from Spotify first (higher quality)
             let art = await getSpotifyArtwork(artist, title);
-            console.log(`Spotify artwork result: ${art ? 'Found' : 'Not found'}`);
             
             // Fall back to Azura art if Spotify doesn't have it
             if (!art && song.art) {
                 art = song.art;
-                console.log(`Using Azura artwork: ${art}`);
-            }
-            
-            if (!art) {
-                console.log('No artwork available from Spotify or Azura');
+                console.log(`Using Azura artwork for "${title}"`);
             }
             
             // Check if Spotify link exists in API response, otherwise construct search URL
@@ -255,7 +279,6 @@ async function updateStatus() {
         }
         
         // Set the activity with the status text
-        // Note: Discord doesn't support images in status, but we can reference artwork in the status text
         client.user.setActivity(statusText, { 
             type: ActivityType.Listening
         });
@@ -266,7 +289,6 @@ async function updateStatus() {
 async function createStreamResource() {
     try {
         // Fetch the stream manually with custom User-Agent header
-        // This ensures the User-Agent is properly set before FFmpeg processes the stream
         const response = await fetch(STREAM_URL, {
             headers: {
                 'User-Agent': USER_AGENT
@@ -278,7 +300,6 @@ async function createStreamResource() {
         }
 
         // Create audio resource from the response body stream
-        // StreamType.Arbitrary tells FFmpeg to auto-detect the format
         const resource = createAudioResource(response.body, {
             inputType: StreamType.Arbitrary,
             inlineVolume: false,
@@ -287,7 +308,7 @@ async function createStreamResource() {
             }
         });
 
-        console.log('Audio resource created successfully with user agent:', USER_AGENT);
+        console.log('Audio resource created successfully');
         return resource;
     } catch (error) {
         console.error('Error creating audio resource:', error);
@@ -295,23 +316,41 @@ async function createStreamResource() {
     }
 }
 
+// Helper to get backoff time with exponential increase
+function getReconnectBackoff(guildId) {
+    const attempts = reconnectAttempts[guildId] || 0;
+    return RECONNECT_BACKOFF_MS * Math.pow(2, Math.min(attempts, 3)); // Cap at 16 seconds
+}
+
+// Reset reconnect counter for a guild
+function resetReconnectCounter(guildId) {
+    delete reconnectAttempts[guildId];
+}
+
+// Increment reconnect counter for a guild
+function incrementReconnectCounter(guildId) {
+    reconnectAttempts[guildId] = (reconnectAttempts[guildId] || 0) + 1;
+}
+
 // Connect to voice channel and play stream
 async function connectToVoiceChannel(channel) {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/65adcaca-c989-4b88-87ed-f71a63d67458',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'bot.js:293',message:'connectToVoiceChannel called',data:{channelId:channel.id,guildId:channel.guild.id,shouldStayConnected:shouldStayConnected,encryptionErrorOccurred:encryptionErrorOccurred,hasConnection:!!connection,connectionStatus:connection?.state?.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,C'})}).catch(()=>{});
-    // #endregion
-    
     // Don't attempt connection if encryption has failed
     if (encryptionErrorOccurred) {
         console.error('Cannot connect - encryption error has occurred. Please check encryption library installation.');
+        sendDebugLog('bot.js:connectToVoiceChannel', 'Connection blocked due to encryption error', {
+            channelId: channel.id,
+            guildId: channel.guild.id,
+            encryptionErrorOccurred
+        });
         return false;
     }
     
     try {
         shouldStayConnected = true;
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/65adcaca-c989-4b88-87ed-f71a63d67458',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'bot.js:300',message:'shouldStayConnected set to true',data:{shouldStayConnected:true,encryptionErrorOccurred:encryptionErrorOccurred},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-        // #endregion
+        sendDebugLog('bot.js:connectToVoiceChannel', 'shouldStayConnected set to true', {
+            channelId: channel.id,
+            guildId: channel.guild.id
+        });
         
         // Disconnect from previous channel if exists
         if (currentVoiceChannel && connection) {
@@ -320,8 +359,7 @@ async function connectToVoiceChannel(channel) {
                     connection.destroy();
                 }
             } catch (error) {
-                // Connection might already be destroyed, ignore
-                console.log('Connection already destroyed or error destroying:', error.message);
+                console.log('Connection already destroyed:', error.message);
             }
             connection = null;
         }
@@ -350,26 +388,28 @@ async function connectToVoiceChannel(channel) {
             guildId: channel.guild.id,
             adapterCreator: channel.guild.voiceAdapterCreator,
         });
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/65adcaca-c989-4b88-87ed-f71a63d67458',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'bot.js:329',message:'joinVoiceChannel called',data:{channelId:channel.id,guildId:channel.guild.id,connectionState:connection.state.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-        // #endregion
 
-        // Wait for connection to be ready
+        // Wait for connection to be ready (10 second timeout)
         try {
             await entersState(connection, VCS.Ready, 10000);
-            console.log('Connected to voice channel');
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/65adcaca-c989-4b88-87ed-f71a63d67458',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'bot.js:338',message:'Connection reached Ready state',data:{connectionState:connection.state.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-            // #endregion
+            console.log(`Connected to voice channel: ${channel.name}`);
+            resetReconnectCounter(channel.guild.id);
+            sendDebugLog('bot.js:connectToVoiceChannel', 'Connection reached Ready state', {
+                channelId: channel.id,
+                guildId: channel.guild.id
+            });
         } catch (error) {
             console.error('Connection failed:', error.message);
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/65adcaca-c989-4b88-87ed-f71a63d67458',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'bot.js:340',message:'Connection failed to reach Ready',data:{error:error.message,connectionState:connection?.state?.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-            // #endregion
-            // Don't try to reconnect if it's an encryption error - it will fail again
+            sendDebugLog('bot.js:connectToVoiceChannel', 'Connection failed to reach Ready', {
+                error: error.message,
+                channelId: channel.id,
+                guildId: channel.guild.id
+            });
+            // Don't try to reconnect if it's an encryption error
             if (error.message && error.message.includes('encryption')) {
                 console.error('Encryption error - check that libsodium-wrappers or tweetnacl is properly installed');
                 shouldStayConnected = false;
+                encryptionErrorOccurred = true;
             }
             try {
                 if (connection && connection.state.status !== VoiceConnectionStatus.Destroyed) {
@@ -383,13 +423,14 @@ async function connectToVoiceChannel(channel) {
 
         // Remove any existing Disconnected listeners to prevent duplicates
         connection.removeAllListeners(VoiceConnectionStatus.Disconnected);
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/65adcaca-c989-4b88-87ed-f71a63d67458',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'bot.js:356',message:'Adding Disconnected event listener',data:{connectionState:connection.state.status,shouldStayConnected:shouldStayConnected},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
+        
         connection.on(VoiceConnectionStatus.Disconnected, async () => {
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/65adcaca-c989-4b88-87ed-f71a63d67458',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'bot.js:359',message:'Disconnected event fired',data:{shouldStayConnected:shouldStayConnected,encryptionErrorOccurred:encryptionErrorOccurred,connectionState:connection?.state?.status,hasCurrentChannel:!!currentVoiceChannel},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,D'})}).catch(()=>{});
-            // #endregion
+            sendDebugLog('bot.js:Disconnected', 'Disconnected event fired', {
+                shouldStayConnected,
+                encryptionErrorOccurred,
+                connectionState: connection?.state?.status,
+                guildId: channel.guild.id
+            });
             // Only reconnect if we should stay connected and encryption hasn't failed
             if (shouldStayConnected && !encryptionErrorOccurred) {
                 console.log('Disconnected, attempting to reconnect...');
@@ -398,11 +439,15 @@ async function connectToVoiceChannel(channel) {
                         entersState(connection, VCS.Ready, 5000),
                         new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
                     ]);
+                    resetReconnectCounter(channel.guild.id);
                 } catch (error) {
-                    // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/65adcaca-c989-4b88-87ed-f71a63d67458',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'bot.js:365',message:'Disconnected reconnection attempt failed',data:{error:error.message,shouldStayConnected:shouldStayConnected,encryptionErrorOccurred:encryptionErrorOccurred},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,D'})}).catch(()=>{});
-                    // #endregion
-                    // Check if it's an encryption error - if so, don't reconnect
+                    sendDebugLog('bot.js:Disconnected', 'Disconnected reconnection attempt failed', {
+                        error: error.message,
+                        shouldStayConnected,
+                        encryptionErrorOccurred,
+                        guildId: channel.guild.id
+                    });
+                    // Check if it's an encryption error
                     if (error.message && error.message.includes('encryption')) {
                         console.error('Encryption error detected - stopping reconnection attempts');
                         shouldStayConnected = false;
@@ -410,11 +455,30 @@ async function connectToVoiceChannel(channel) {
                         return;
                     }
                     
-                    // Force reconnect only if shouldStayConnected is still true and no encryption error
+                    // Force reconnect only if shouldStayConnected and no encryption error
                     if (shouldStayConnected && !encryptionErrorOccurred && currentVoiceChannel) {
-                        // #region agent log
-                        fetch('http://127.0.0.1:7242/ingest/65adcaca-c989-4b88-87ed-f71a63d67458',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'bot.js:374',message:'Scheduling reconnection',data:{shouldStayConnected:shouldStayConnected,hasChannel:!!currentVoiceChannel},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,C'})}).catch(()=>{});
-                        // #endregion
+                        incrementReconnectCounter(channel.guild.id);
+                        const attempts = reconnectAttempts[channel.guild.id];
+                        
+                        if (attempts > MAX_RECONNECT_ATTEMPTS) {
+                            console.error(`Max reconnect attempts (${MAX_RECONNECT_ATTEMPTS}) exceeded for guild ${channel.guild.id}`);
+                            sendDebugLog('bot.js:Disconnected', 'Max reconnect attempts exceeded', {
+                                attempts,
+                                maxAttempts: MAX_RECONNECT_ATTEMPTS,
+                                guildId: channel.guild.id
+                            });
+                            return;
+                        }
+                        
+                        const backoff = getReconnectBackoff(channel.guild.id);
+                        console.log(`Scheduling reconnection (attempt ${attempts}/${MAX_RECONNECT_ATTEMPTS}) in ${backoff}ms...`);
+                        sendDebugLog('bot.js:Disconnected', 'Scheduling reconnection', {
+                            attempt: attempts,
+                            maxAttempts: MAX_RECONNECT_ATTEMPTS,
+                            backoffMs: backoff,
+                            guildId: channel.guild.id
+                        });
+                        
                         setTimeout(async () => {
                             try {
                                 // Clean up old connection first
@@ -442,6 +506,7 @@ async function connectToVoiceChannel(channel) {
                                 });
                                 
                                 await entersState(connection, VCS.Ready, 10000);
+                                resetReconnectCounter(freshChannel.guild.id);
                                 
                                 if (!audioPlayer) {
                                     audioPlayer = createAudioPlayer();
@@ -455,13 +520,12 @@ async function connectToVoiceChannel(channel) {
                                 }
                             } catch (error) {
                                 console.error('Reconnection error:', error.message);
-                                // If encryption error, stop trying
                                 if (error.message && error.message.includes('encryption')) {
                                     shouldStayConnected = false;
                                     encryptionErrorOccurred = true;
                                 }
                             }
-                        }, 2000);
+                        }, backoff);
                     }
                 }
             }
@@ -486,6 +550,7 @@ async function connectToVoiceChannel(channel) {
         console.log('Started playing audio stream');
 
         currentVoiceChannel = channel;
+        resetReconnectCounter(channel.guild.id);
         
         // Save to database
         await saveVoiceChannel(channel.guild.id, channel.id);
@@ -573,6 +638,7 @@ async function disconnectFromVoiceChannel() {
         
         // Clear from database
         await clearSavedVoiceChannel(guild.id);
+        resetReconnectCounter(guild.id);
     }
     
     currentVoiceChannel = null;
@@ -703,33 +769,23 @@ client.on('interactionCreate', async interaction => {
         const np = await fetchNowPlaying();
         
         if (np && np.song) {
-            // Get custom emoji for now playing - try to get from cache, fallback to string format
-            let nowPlayingEmoji = '<:_:1463041463716937885>';
-            const emoji = client.emojis.cache.get('1463041463716937885');
-            if (emoji) {
-                nowPlayingEmoji = emoji.toString();
-            }
-            
             const embed = new EmbedBuilder()
-                .setTitle(`${nowPlayingEmoji} Now Playing`)
+                .setTitle('🎵 Now Playing')
                 .setDescription(`**${np.song}**\nby ${np.artist}`)
                 .setColor(0xE91E63) // Vibrant pink/magenta from image
                 .addFields(
-                    { name: 'Spotify', value: `[Search on Spotify](${np.spotifyUrl})`, inline: true }
+                    { name: '<:spotify:1463041463716937885> Spotify', value: `[Search on Spotify](${np.spotifyUrl})`, inline: true }
                 );
 
             // Add live streaming indicator if someone is actively streaming
             if (np.isLive && np.streamerName) {
                 embed.setDescription(`**LIVE:** ${np.streamerName} is currently on air!\n\n**${np.song}**\nby ${np.artist}`);
-                embed.setColor(0xDC143C); // Deep red/crimson for live (from image's red tones)
+                embed.setColor(0xDC143C); // Deep red/crimson for live
             }
 
             // Set Spotify artwork (or fallback) as thumbnail only (top right)
             if (np.art && np.art.trim() !== '') {
-                console.log(`Setting artwork in embed: ${np.art}`);
                 embed.setThumbnail(np.art);
-            } else {
-                console.log('No artwork available to display in embed');
             }
 
             await interaction.editReply({ embeds: [embed] });
@@ -751,7 +807,7 @@ client.on('interactionCreate', async interaction => {
             .addFields(
                 { name: '🔧 Technologies', value: '• Discord.js\n• AzuraCast API\n• Spotify API\n• MongoDB', inline: false }
             )
-            .setFooter({ text: 'RBC Television, Vision Roblox 2026', iconURL: 'https://avatars.githubusercontent.com/u/206373161?s=200&v=4' });
+            .setFooter({ text: 'RBC Television © 2026', iconURL: 'https://avatars.githubusercontent.com/u/206373161?s=200&v=4' });
 
         await interaction.reply({ embeds: [embed] });
     }
@@ -814,16 +870,39 @@ async function restoreVoiceChannels() {
 
 // Handle disconnects and reconnects
 client.on('voiceStateUpdate', async (oldState, newState) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/65adcaca-c989-4b88-87ed-f71a63d67458',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'bot.js:772',message:'voiceStateUpdate fired',data:{botUserId:client.user?.id,oldStateMemberId:oldState.member?.id,oldChannelId:oldState.channelId,newChannelId:newState.channelId,shouldStayConnected:shouldStayConnected,encryptionErrorOccurred:encryptionErrorOccurred,currentChannelId:currentVoiceChannel?.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
     // If bot was disconnected from a channel, reconnect only if shouldStayConnected is true and no encryption error
     if (shouldStayConnected && !encryptionErrorOccurred && oldState.member?.id === client.user.id && oldState.channelId && !newState.channelId) {
         if (currentVoiceChannel && currentVoiceChannel.id === oldState.channelId) {
-            console.log('Bot was disconnected, reconnecting...');
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/65adcaca-c989-4b88-87ed-f71a63d67458',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'bot.js:817',message:'voiceStateUpdate triggering reconnection',data:{shouldStayConnected:shouldStayConnected,encryptionErrorOccurred:encryptionErrorOccurred},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-            // #endregion
+            console.log('Bot was disconnected, attempting to reconnect...');
+            sendDebugLog('bot.js:voiceStateUpdate', 'Bot was disconnected, triggering reconnection', {
+                shouldStayConnected,
+                encryptionErrorOccurred,
+                guildId: oldState.guild.id,
+                channelId: oldState.channelId
+            });
+            
+            incrementReconnectCounter(oldState.guild.id);
+            const attempts = reconnectAttempts[oldState.guild.id];
+            
+            if (attempts > MAX_RECONNECT_ATTEMPTS) {
+                console.error(`Max reconnect attempts (${MAX_RECONNECT_ATTEMPTS}) exceeded`);
+                sendDebugLog('bot.js:voiceStateUpdate', 'Max reconnect attempts exceeded', {
+                    attempts,
+                    maxAttempts: MAX_RECONNECT_ATTEMPTS,
+                    guildId: oldState.guild.id
+                });
+                return;
+            }
+            
+            const backoff = getReconnectBackoff(oldState.guild.id);
+            console.log(`Scheduling reconnection (attempt ${attempts}/${MAX_RECONNECT_ATTEMPTS}) in ${backoff}ms...`);
+            sendDebugLog('bot.js:voiceStateUpdate', 'Scheduling reconnection with backoff', {
+                attempt: attempts,
+                maxAttempts: MAX_RECONNECT_ATTEMPTS,
+                backoffMs: backoff,
+                guildId: oldState.guild.id
+            });
+            
             setTimeout(async () => {
                 if (shouldStayConnected && !encryptionErrorOccurred && currentVoiceChannel) {
                     try {
@@ -835,14 +914,13 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
                         }
                     } catch (error) {
                         console.error('Error reconnecting from voiceStateUpdate:', error.message);
-                        // If encryption error, stop trying
                         if (error.message && error.message.includes('encryption')) {
                             encryptionErrorOccurred = true;
                             shouldStayConnected = false;
                         }
                     }
                 }
-            }, 2000);
+            }, backoff);
         }
     }
 });
