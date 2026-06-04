@@ -1,8 +1,10 @@
 # Azuracast Discord Bot
 A Discord bot that plays an Azuracast live stream in a voice channel and provides information about currently playing songs.
 
-> [!NOTE]
-> If your just looking to add the RBC Radio bot in your server to enjoy some songs from RBC Radio, consider adding the bot [here.](https://discord.com/oauth2/authorize?client_id=1444607568776527957)
+> [!CAUTION]
+> This respository was archived due to the fact that many of its features did not work well with recent Discord Voice API updates. You can try fixing this but it is no longer offically supported by RBC Television and we have moved on to a closed-source system. Thank you for you cooperation. 
+>  
+> Nate, RBC Technology.
 
 ## Features
 
